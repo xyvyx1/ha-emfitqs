@@ -10,7 +10,7 @@ from homeassistant.const import (ATTR_ATTRIBUTION, CONF_HOST, CONF_SCAN_INTERVAL
 from homeassistant.util import Throttle
 from homeassistant.helpers.entity import Entity
 
-__version__ = '1.0'
+__version__ = '1.1'
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ SENSOR_TYPES = {
     'heart_rate': ['Heart Rate', 'bpm', 'mdi:heart','hr', SensorStateClass.MEASUREMENT],
     'respiratory_rate': ['Respiratory Rate', 'bpm', 'mdi:pinwheel','rr', SensorStateClass.MEASUREMENT],
     'activity_level': ['Activity', '', 'mdi:vibrate','act', SensorStateClass.MEASUREMENT],
-    'seconds_in_bed': ['Seconds in Bed', 's', 'mdi:timer', SensorStateClass.TOTAL]
+    'seconds_in_bed': ['Seconds in Bed', 's', 'mdi:timer', '', SensorStateClass.TOTAL]
 }
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
