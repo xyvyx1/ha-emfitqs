@@ -1,109 +1,63 @@
-import logging
-from datetime import timedelta
-import requests
-import voluptuous as vol
+"""Binary sensor platform for Emfit QS."""
 
-from homeassistant.components.binary_sensor import (PLATFORM_SCHEMA, BinarySensorDeviceClass, BinarySensorEntity)
-import homeassistant.helpers.config_validation as cv
-from homeassistant.const import (CONF_MONITORED_CONDITIONS, ATTR_ATTRIBUTION, CONF_HOST, CONF_SCAN_INTERVAL)
-from homeassistant.util import Throttle
+from __future__ import annotations
 
-__version__ = '1.0'
+from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import ATTR_ATTRIBUTION
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-_LOGGER = logging.getLogger(__name__)
+from . import DOMAIN
+from .coordinator import EmfitQSCoordinator
 
-MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=10)
 CONF_ATTRIBUTION = "Data provided by Emfit QS"
-DATA_ARLO = 'data_emfitqs'
-DEFAULT_BRAND = 'Emfit'
-DOMAIN = 'emfitqs'
+DEFAULT_BRAND = "Emfit"
+DEFAULT_NAME = "Emfit QS Sleep Tracker"
 
-INTERVAL = 10
-HOST = '192.168.1.40'
 
-SENSOR_PREFIX = 'EmfitQS '
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Emfit QS binary sensors from a config entry."""
+    coordinator: EmfitQSCoordinator = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities([EmfitQSBedPresenceBinarySensor(coordinator)])
 
-SENSOR_TYPES = {
-    'bed_presence': ['Bed Presence', '', 'mdi:bed','pres', None]
-}
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Required(CONF_HOST): cv.string,
-    vol.Required(CONF_MONITORED_CONDITIONS, default=[]):
-        vol.All(cv.ensure_list, [vol.In(SENSOR_TYPES)]),
-})
+class EmfitQSBedPresenceBinarySensor(CoordinatorEntity[EmfitQSCoordinator], BinarySensorEntity):
+    """Emfit QS bed presence binary sensor."""
 
-def setup_platform(hass, config, add_entities, discovery_info=None):
-    scan_interval = config.get(CONF_SCAN_INTERVAL)
-    host = config.get(CONF_HOST)
+    _attr_name = "Bed Presence"
+    _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
 
-    try:
-        data = EmfitQSData(host)
-        data.update()
-        sensors = []
-        for resource in config[CONF_MONITORED_CONDITIONS]:
-            sensor_type = resource.lower()
-            if sensor_type == "bed_presence":         
-                sensors.append(EmfitQSBinarySensor(data.data['ser'], data, sensor_type))
-        add_entities(sensors)
-        return True
-    except Exception as e:
-        _LOGGER.error("Error ocurred: " + repr(e))
-        return False
+    def __init__(self, coordinator: EmfitQSCoordinator) -> None:
+        """Initialize binary sensor."""
+        super().__init__(coordinator)
+        serial = coordinator.data.get("ser", "unknown")
+        self._attr_unique_id = f"{serial}_bed_presence"
+        self._attr_name = f"EmfitQS {serial} Bed Presence"
 
-class EmfitQSData(object):    
+    @property
+    def is_on(self) -> bool:
+        """Return true if bed is occupied."""
+        return self.coordinator.data.get("pres") == "1"
 
-    def __init__(self, host):
-        self._host = host
-        self.data = None
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Return state attributes."""
+        return {ATTR_ATTRIBUTION: CONF_ATTRIBUTION}
 
-    @Throttle(MIN_TIME_BETWEEN_UPDATES)
-    def update(self):      
-        entries = {}
-        try:           
-            r = requests.get('http://{0}/dvmstatus.htm'.format(self._host), timeout=10)
-            if r.status_code == 200:
-                elements = r.text.replace("<br>",'').lower().split('\r\n')
-                filtered = list(filter(None, elements))
-                for f in filtered:
-                    entry = f.split("=")
-                    entry_name = entry[0].replace(':', '').replace(' ', '_').replace(',', '')
-                    if entry_name=="pres":
-                        if entry[1]=="0":
-                            entry_value = "off"
-                        else:
-                            entry_value = "on"
-                    else:
-                        entry_value = entry[1]
-                    entries[entry_name] = entry_value
-            requests.session().close()
-        except Exception as e:
-            _LOGGER.error("Error ocurred: " + repr(e))
-        self.data = entries
-        _LOGGER.debug("Data = %s", self.data)
-        
-class EmfitQSBinarySensor(BinarySensorEntity):
-
-    def __init__(self, serial, data, sensor_type):
-        self.data = data
-        self.type = sensor_type
-        self._attr_name = SENSOR_PREFIX + serial + ' ' + SENSOR_TYPES[self.type][0]
-        self._attr_icon = SENSOR_TYPES[self.type][2]
-        self._attr_state = None
-        self._attr_state_class = SENSOR_TYPES[self.type][4]
-        self._attr_device_class = "occupancy"
-        self._unit = SENSOR_TYPES[self.type][1]  # if needed elsewhere
-        self._resource = SENSOR_TYPES[self.type][3]  # needed for update method
-
-        # Device attributes
-        self._attr_device_state_attributes = {
-            ATTR_ATTRIBUTION: CONF_ATTRIBUTION
+    @property
+    def device_info(self):
+        """Return device info for registry."""
+        serial = self.coordinator.data.get("ser")
+        if not serial:
+            return None
+        return {
+            "identifiers": {(DOMAIN, serial)},
+            "name": DEFAULT_NAME,
+            "manufacturer": DEFAULT_BRAND,
         }
-
-    def update(self):
-        try:
-            self.data.update()
-            data = self.data.data
-            self._attr_state = data[self._resource]
-        except Exception as e:
-            _LOGGER.error("Error ocurred: " + repr(e))

@@ -3,7 +3,9 @@
   "name": "Emfit QS Sleep Tracker",
   "documentation": "https://github.com/jxlarrea/ha-emfitqs",
   "dependencies": [],
-  "codeowners": [ "@jxlarrea" ],
+  "codeowners": ["@jxlarrea"],
   "requirements": [],
-  "version": "2.3"
+  "version": "2.3",
+  "config_flow": true,
+  "iot_class": "local_polling"
 }
