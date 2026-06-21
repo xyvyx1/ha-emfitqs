@@ -1,11 +1,11 @@
 {
   "domain": "emfitqs",
   "name": "Emfit QS Sleep Tracker",
-  "documentation": "https://github.com/jxlarrea/ha-emfitqs",
-  "dependencies": [],
-  "codeowners": ["@jxlarrea"],
+  "documentation": "https://github.com/xyvyx1/ha-emfitqs",
+  "dependencies": ["http"],
+  "codeowners": ["@xyvyx1"],
   "requirements": [],
-  "version": "2.3",
+  "version": "2026.6.21.1",
   "config_flow": true,
   "iot_class": "local_polling"
 }
