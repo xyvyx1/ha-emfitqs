@@ -10,7 +10,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_SCAN_INTERVAL
 
-from .coordinator import is_valid_host
+from .coordinator import fetch_dvmstatus, is_valid_host
 
 DOMAIN = "emfitqs"
 DEFAULT_SCAN_INTERVAL = 30
@@ -19,22 +19,7 @@ MIN_SCAN_INTERVAL = 10
 
 async def _async_validate_host(hass, host: str) -> dict[str, str]:
     """Validate host and return parsed device data."""
-
-    def _fetch() -> dict[str, str]:
-        response = requests.get(f"http://{host}/dvmstatus.htm", timeout=10)
-        response.raise_for_status()
-        entries: dict[str, str] = {}
-        elements = response.text.replace("<br>", "").lower().split("\r\n")
-        filtered = list(filter(None, elements))
-        for item in filtered:
-            entry = item.split("=", 1)
-            if len(entry) != 2:
-                continue
-            entry_name = entry[0].replace(":", "").replace(" ", "_").replace(",", "")
-            entries[entry_name] = entry[1]
-        return entries
-
-    return await hass.async_add_executor_job(_fetch)
+    return await hass.async_add_executor_job(fetch_dvmstatus, host)
 
 
 class EmfitQSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

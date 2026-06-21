@@ -28,6 +28,27 @@ def is_valid_host(host: str) -> bool:
         return bool(HOSTNAME_PATTERN.fullmatch(host))
 
 
+def parse_dvmstatus_response(response_text: str) -> dict[str, str]:
+    """Parse dvmstatus text content into key/value pairs."""
+    entries: dict[str, str] = {}
+    elements = response_text.replace("<br>", "").lower().split("\r\n")
+    filtered = list(filter(None, elements))
+    for item in filtered:
+        entry = item.split("=", 1)
+        if len(entry) != 2:
+            continue
+        entry_name = entry[0].replace(":", "").replace(" ", "_").replace(",", "")
+        entries[entry_name] = entry[1]
+    return entries
+
+
+def fetch_dvmstatus(host: str) -> dict[str, str]:
+    """Fetch and parse dvmstatus data from host."""
+    response = requests.get(f"http://{host}/dvmstatus.htm", timeout=10)
+    response.raise_for_status()
+    return parse_dvmstatus_response(response.text)
+
+
 class EmfitQSCoordinator(DataUpdateCoordinator[dict[str, str]]):
     """Coordinate Emfit QS data updates."""
 
@@ -40,29 +61,14 @@ class EmfitQSCoordinator(DataUpdateCoordinator[dict[str, str]]):
             update_interval=timedelta(seconds=scan_interval),
         )
         if not is_valid_host(host):
-            raise UpdateFailed("Invalid Emfit QS host")
+            raise ValueError("Invalid Emfit QS host")
         self._host = host
 
     async def _async_update_data(self) -> dict[str, str]:
         """Fetch data from device."""
 
-        def _fetch() -> dict[str, str]:
-            response = requests.get(f"http://{self._host}/dvmstatus.htm", timeout=10)
-            response.raise_for_status()
-
-            entries: dict[str, str] = {}
-            elements = response.text.replace("<br>", "").lower().split("\r\n")
-            filtered = list(filter(None, elements))
-            for item in filtered:
-                entry = item.split("=", 1)
-                if len(entry) != 2:
-                    continue
-                entry_name = entry[0].replace(":", "").replace(" ", "_").replace(",", "")
-                entries[entry_name] = entry[1]
-            return entries
-
         try:
-            data = await self.hass.async_add_executor_job(_fetch)
+            data = await self.hass.async_add_executor_job(fetch_dvmstatus, self._host)
         except requests.RequestException as err:
             raise UpdateFailed(f"Error fetching Emfit QS data: {err}") from err
 

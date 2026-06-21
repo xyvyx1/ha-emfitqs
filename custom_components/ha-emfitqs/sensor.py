@@ -28,7 +28,7 @@ SENSOR_TYPES = {
         SensorStateClass.MEASUREMENT,
     ),
     "activity_level": ("Activity", "", "mdi:vibrate", "act", SensorStateClass.MEASUREMENT),
-    "seconds_in_bed": ("Seconds in Bed", "s", "mdi:timer", "pres", SensorStateClass.TOTAL),
+    "seconds_in_bed": ("Seconds in Bed", "s", "mdi:timer", "", SensorStateClass.TOTAL),
 }
 
 
@@ -108,9 +108,7 @@ class EmfitQSTimeInBedSensor(EmfitQSBaseEntity, SensorEntity):
         presence = self.coordinator.data.get("pres")
         now = datetime.now()
 
-        if self._last_presence is None and presence == "1":
-            self._last_presence_change = now
-        elif self._last_presence == "0" and presence == "1":
+        if presence == "1" and self._last_presence != "1":
             self._last_presence_change = now
         elif presence != "1":
             self._last_presence_change = None
