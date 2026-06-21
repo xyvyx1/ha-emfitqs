@@ -21,8 +21,7 @@ This component provides real-time data polled directly from Emfit QS Sleep Track
 
 ### HACS Installation
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge)](https://github.com/custom-components/hacs)
- This repository is part of the default HACS store. Search for the "Emfit QS Sleep Tracker" component in HACS and install it from there.
+This repo is not yet part of the HACS store. 
 
 ### Manual Installation
 
@@ -43,7 +42,7 @@ The integration auto-creates all supported entities and groups them under a sing
 
 | Name  | Type | Description |
 | ----- | ---- | ----------- |
-| bed_presence | `binary_sensor` | Bed presence |
+| bed_presence | `occupancy` | Bed presence |
 | heart_rate | `sensor` | Heart rate (BPM) |
 | respiratory_rate | `sensor` | Respiratory rate (BPM) |
 | activity_level | `sensor` | Activity level |
