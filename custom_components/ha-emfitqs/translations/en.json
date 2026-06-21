@@ -13,5 +13,15 @@
       "cannot_connect": "Failed to connect",
       "invalid_response": "Invalid response from Emfit QS"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Emfit QS Options",
+        "data": {
+          "scan_interval": "Scan interval (seconds)"
+        }
+      }
+    }
   }
 }
