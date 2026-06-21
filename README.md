@@ -29,33 +29,17 @@ This component provides real-time data polled directly from Emfit QS Sleep Track
 Copy the `custom_components/ha-emfitqs` directory into your `/config/custom_components` directory.
 
 
-
 ## Component Configuration
 
-Add the following to your `configuration.yaml` file:
+1. In Home Assistant, go to **Settings → Devices & Services → Add Integration**.
+2. Search for **Emfit QS Sleep Tracker**.
+3. Enter:
+   - `host`: IP address or hostname of your Emfit QS device
+   - `scan_interval`: polling interval in seconds (default 30, minimum 10)
 
-```yaml
+The integration auto-creates all supported entities and groups them under a single Emfit QS device.
 
-sensor:
-  - platform: emfitqs
-    host: 192.168.1.x # Replace with your Emfit QS device IP Address.
-    scan_interval: 10
-    resources:
-      - heart_rate
-      - respiratory_rate
-      - activity_level
-      - seconds_in_bed
-
-binary_sensor:
-  - platform: emfitqs
-    host: 192.168.1.x # Replace with your Emfit QS device IP Address.
-    scan_interval: 10
-    monitored_conditions:
-      - bed_presence
-```
-
-
-### Sensor Resources & Monitored Conditions
+### Created Entities
 
 | Name  | Type | Description |
 | ----- | ---- | ----------- |
@@ -64,6 +48,3 @@ binary_sensor:
 | respiratory_rate | `sensor` | Respiratory rate (BPM) |
 | activity_level | `sensor` | Activity level |
 | seconds_in_bed | `sensor` | Number of seconds in bed |
-
-
-**NOTE:** In Home Assistant, the component sensor names include the device serial number, for example `binary_sensor.emfitqs_012345_bed_presence` and `sensor.emfitqs_012345_heart_rate` where "012345" is the device serial numer. This allows you to add multiple entries in your config file.

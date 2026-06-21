@@ -1,142 +1,127 @@
-import logging
-import datetime
-from datetime import timedelta
-import requests
-import voluptuous as vol
-import time
-from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorStateClass
-import homeassistant.helpers.config_validation as cv
-from homeassistant.const import (ATTR_ATTRIBUTION, CONF_HOST, CONF_SCAN_INTERVAL, CONF_RESOURCES)
-from homeassistant.util import Throttle
-from homeassistant.helpers.entity import Entity
+"""Sensor platform for Emfit QS."""
 
-__version__ = '1.1'
+from __future__ import annotations
 
-_LOGGER = logging.getLogger(__name__)
+from datetime import datetime
 
-MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=10)
+from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import ATTR_ATTRIBUTION
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from . import DOMAIN
+from .coordinator import EmfitQSCoordinator
+
 CONF_ATTRIBUTION = "Data provided by Emfit QS"
-DATA_ARLO = 'data_emfitqs'
-DEFAULT_BRAND = 'Emfit'
-DOMAIN = 'emfitqs'
-
-INTERVAL = 10
-HOST = '192.168.1.40'
-
-SENSOR_PREFIX = 'EmfitQS '
+DEFAULT_BRAND = "Emfit"
+DEFAULT_NAME = "Emfit QS Sleep Tracker"
 
 SENSOR_TYPES = {
-    'heart_rate': ['Heart Rate', 'bpm', 'mdi:heart','hr', SensorStateClass.MEASUREMENT],
-    'respiratory_rate': ['Respiratory Rate', 'bpm', 'mdi:pinwheel','rr', SensorStateClass.MEASUREMENT],
-    'activity_level': ['Activity', '', 'mdi:vibrate','act', SensorStateClass.MEASUREMENT],
-    'seconds_in_bed': ['Seconds in Bed', 's', 'mdi:timer', '', SensorStateClass.TOTAL]
+    "heart_rate": ("Heart Rate", "bpm", "mdi:heart", "hr", SensorStateClass.MEASUREMENT),
+    "respiratory_rate": (
+        "Respiratory Rate",
+        "bpm",
+        "mdi:pinwheel",
+        "rr",
+        SensorStateClass.MEASUREMENT,
+    ),
+    "activity_level": ("Activity", None, "mdi:vibrate", "act", SensorStateClass.MEASUREMENT),
+    "seconds_in_bed": ("Seconds in Bed", "s", "mdi:timer", "pres", SensorStateClass.TOTAL),
 }
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Required(CONF_HOST): cv.string,
-    vol.Required(CONF_RESOURCES, default=[]):
-        vol.All(cv.ensure_list, [vol.In(SENSOR_TYPES)]),
-})
 
-def setup_platform(hass, config, add_entities, discovery_info=None):
-    scan_interval = config.get(CONF_SCAN_INTERVAL)
-    host = config.get(CONF_HOST)
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Emfit QS sensors from a config entry."""
+    coordinator: EmfitQSCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    try:
-        data = EmfitQSData(host)
-        data.update()
-        sensors = []
+    entities: list[EmfitQSSensorEntity] = []
+    for sensor_type in SENSOR_TYPES:
+        if sensor_type == "seconds_in_bed":
+            entities.append(EmfitQSTimeInBedSensor(coordinator, sensor_type))
+        else:
+            entities.append(EmfitQSSensorEntity(coordinator, sensor_type))
 
-        for resource in config[CONF_RESOURCES]:
-            sensor_type = resource.lower()
-            if sensor_type == 'seconds_in_bed':
-                sensors.append(EmfitQSTimeInBedSensor(data.data['ser'], data, sensor_type))
-            else:
-                sensors.append(EmfitQSSensor(data.data['ser'], data, sensor_type))
+    async_add_entities(entities)
 
-        add_entities(sensors)
-        return True
-    except Exception as e:
-        _LOGGER.error("Error ocurred: " + repr(e))
-        return False
 
-class EmfitQSData(object):    
+class EmfitQSBaseEntity(CoordinatorEntity[EmfitQSCoordinator]):
+    """Base Emfit QS entity."""
 
-    def __init__(self, host):       
-        self._host = host
-        self.data = None
-    
-    @Throttle(MIN_TIME_BETWEEN_UPDATES)
-    def update(self):      
-        entries = {}
-        try:
-            r = requests.get('http://{0}/dvmstatus.htm'.format(self._host), timeout=10)       
-            if r.status_code == 200:
-                elements = r.text.replace("<br>",'').lower().split('\r\n')
-                filtered = list(filter(None, elements))
-                for f in filtered:
-                    entry = f.split("=")
-                    entry_name = entry[0].replace(':', '').replace(' ', '_').replace(',', '')
-                    entry_value = entry[1]
-                    entries[entry_name] = entry_value
-            requests.session().close()
-        except Exception as e:
-            _LOGGER.error("Error ocurred: " + repr(e))
+    def __init__(self, coordinator: EmfitQSCoordinator, sensor_type: str) -> None:
+        """Initialize entity."""
+        super().__init__(coordinator)
+        self._sensor_type = sensor_type
+        name, unit, icon, _, state_class = SENSOR_TYPES[sensor_type]
+        serial = coordinator.data.get("ser", "unknown")
+        self._attr_unique_id = f"{serial}_{sensor_type}"
+        self._attr_name = f"EmfitQS {serial} {name}"
+        self._attr_native_unit_of_measurement = unit
+        self._attr_icon = icon
+        self._attr_state_class = state_class
 
-        self.data = entries
-        _LOGGER.debug("Data = %s", self.data)
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Return state attributes."""
+        return {ATTR_ATTRIBUTION: CONF_ATTRIBUTION}
 
-class EmfitQSTimeInBedSensor(Entity):    
-
-    def __init__(self, serial, data, sensor_type):
-        self.last_presence_change = datetime.datetime.now()
-        self.data = data
-        self.type = sensor_type
-        self._attr_name = SENSOR_PREFIX + serial + ' ' + SENSOR_TYPES[self.type][0]
-        self._attr_unit_of_measurement = SENSOR_TYPES[self.type][1]
-        self._attr_icon = SENSOR_TYPES[self.type][2]
-        self._attr_state_class = SENSOR_TYPES[self.type][4]
-        self._attr_state = None
-        self._resource = SENSOR_TYPES[self.type][3]  # needed for update method
-        self._attr_device_state_attributes = {
-            ATTR_ATTRIBUTION: CONF_ATTRIBUTION
+    @property
+    def device_info(self):
+        """Return device info for registry."""
+        serial = self.coordinator.data.get("ser")
+        if not serial:
+            return None
+        return {
+            "identifiers": {(DOMAIN, serial)},
+            "name": DEFAULT_NAME,
+            "manufacturer": DEFAULT_BRAND,
         }
 
-    @Throttle(MIN_TIME_BETWEEN_UPDATES)
-    def update(self):
-        try:
-            old_presence = self.data.data['pres']
-            self.data.update()
-            data = self.data.data  
-            new_presence = self.data.data['pres']
-            if new_presence == "1":            
-                new_ts = datetime.datetime.now() - self.last_presence_change 
-                self._attr_state = round(new_ts.total_seconds())
-            else:
-                self.last_presence_change = datetime.datetime.now()            
-                self._attr_state = 0
-        except Exception as e:
-            _LOGGER.error("Error ocurred: " + repr(e))
 
-class EmfitQSSensor(Entity):
+class EmfitQSSensorEntity(EmfitQSBaseEntity, SensorEntity):
+    """Emfit QS sensor entity."""
 
-    def __init__(self, serial, data, sensor_type):
-        self.data = data
-        self.type = sensor_type
-        self._attr_name = SENSOR_PREFIX + serial + ' ' + SENSOR_TYPES[self.type][0]
-        self._attr_unit_of_measurement = SENSOR_TYPES[self.type][1]
-        self._attr_icon = SENSOR_TYPES[self.type][2]
-        self._attr_state_class = SENSOR_TYPES[self.type][4]
-        self._attr_state = None
-        self._resource = SENSOR_TYPES[self.type][3]  # needed for update method
-        self._attr_device_state_attributes = {
-            ATTR_ATTRIBUTION: CONF_ATTRIBUTION
-        }
+    @property
+    def native_value(self):
+        """Return sensor state."""
+        data_key = SENSOR_TYPES[self._sensor_type][3]
+        return self.coordinator.data.get(data_key)
 
-    def update(self):
-        try:
-            self.data.update()
-            data = self.data.data
-            self._attr_state = data[self._resource]
-        except Exception as e:
-            _LOGGER.error("Error ocurred: " + repr(e))
+
+class EmfitQSTimeInBedSensor(EmfitQSBaseEntity, SensorEntity):
+    """Emfit QS time-in-bed sensor."""
+
+    def __init__(self, coordinator: EmfitQSCoordinator, sensor_type: str) -> None:
+        """Initialize time-in-bed sensor."""
+        super().__init__(coordinator, sensor_type)
+        self._last_presence_change: datetime | None = None
+        self._last_presence: str | None = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        presence = self.coordinator.data.get("pres")
+        now = datetime.now()
+
+        if self._last_presence is None and presence == "1":
+            self._last_presence_change = now
+        elif self._last_presence == "0" and presence == "1":
+            self._last_presence_change = now
+        elif presence != "1":
+            self._last_presence_change = None
+
+        self._last_presence = presence
+        super()._handle_coordinator_update()
+
+    @property
+    def native_value(self):
+        """Return sensor state."""
+        if self.coordinator.data.get("pres") != "1" or self._last_presence_change is None:
+            return 0
+
+        return round((datetime.now() - self._last_presence_change).total_seconds())
