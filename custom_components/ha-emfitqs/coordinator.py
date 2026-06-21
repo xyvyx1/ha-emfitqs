@@ -3,13 +3,29 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import ipaddress
 import logging
+import re
+
 import requests
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 LOGGER = logging.getLogger(__name__)
+HOSTNAME_PATTERN = re.compile(r"^(?=.{1,253}$)([a-zA-Z0-9-]{1,63}\.)*[a-zA-Z0-9-]{1,63}$")
+
+
+def is_valid_host(host: str) -> bool:
+    """Return whether host is a valid IP or hostname."""
+    if not host:
+        return False
+
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return bool(HOSTNAME_PATTERN.fullmatch(host))
 
 
 class EmfitQSCoordinator(DataUpdateCoordinator[dict[str, str]]):
@@ -23,13 +39,9 @@ class EmfitQSCoordinator(DataUpdateCoordinator[dict[str, str]]):
             name="emfitqs",
             update_interval=timedelta(seconds=scan_interval),
         )
+        if not is_valid_host(host):
+            raise UpdateFailed("Invalid Emfit QS host")
         self._host = host
-
-    def async_stop(self) -> None:
-        """Cancel scheduled refreshes."""
-        if self._unsub_refresh is not None:
-            self._unsub_refresh()
-            self._unsub_refresh = None
 
     async def _async_update_data(self) -> dict[str, str]:
         """Fetch data from device."""

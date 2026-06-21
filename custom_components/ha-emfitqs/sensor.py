@@ -27,7 +27,7 @@ SENSOR_TYPES = {
         "rr",
         SensorStateClass.MEASUREMENT,
     ),
-    "activity_level": ("Activity", None, "mdi:vibrate", "act", SensorStateClass.MEASUREMENT),
+    "activity_level": ("Activity", "", "mdi:vibrate", "act", SensorStateClass.MEASUREMENT),
     "seconds_in_bed": ("Seconds in Bed", "s", "mdi:timer", "pres", SensorStateClass.TOTAL),
 }
 

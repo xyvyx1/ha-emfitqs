@@ -10,6 +10,8 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_SCAN_INTERVAL
 
+from .coordinator import is_valid_host
+
 DOMAIN = "emfitqs"
 DEFAULT_SCAN_INTERVAL = 30
 MIN_SCAN_INTERVAL = 10
@@ -48,24 +50,27 @@ class EmfitQSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             host = user_input[CONF_HOST]
             scan_interval = user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
-            try:
-                data = await _async_validate_host(self.hass, host)
-            except requests.RequestException:
+            if not is_valid_host(host):
                 errors["base"] = "cannot_connect"
             else:
-                serial = data.get("ser")
-                if not serial:
-                    errors["base"] = "invalid_response"
+                try:
+                    data = await _async_validate_host(self.hass, host)
+                except requests.RequestException:
+                    errors["base"] = "cannot_connect"
                 else:
-                    await self.async_set_unique_id(serial)
-                    self._abort_if_unique_id_configured()
-                    return self.async_create_entry(
-                        title=f"Emfit QS {serial}",
-                        data={
-                            CONF_HOST: host,
-                            CONF_SCAN_INTERVAL: scan_interval,
-                        },
-                    )
+                    serial = data.get("ser")
+                    if not serial:
+                        errors["base"] = "invalid_response"
+                    else:
+                        await self.async_set_unique_id(serial)
+                        self._abort_if_unique_id_configured()
+                        return self.async_create_entry(
+                            title=f"Emfit QS {serial}",
+                            data={
+                                CONF_HOST: host,
+                                CONF_SCAN_INTERVAL: scan_interval,
+                            },
+                        )
 
         data_schema = vol.Schema(
             {
